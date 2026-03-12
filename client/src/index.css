@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@layer base {
+  body {
+    @apply bg-background text-text font-sans antialiased min-h-screen selection:bg-primary selection:text-white;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-bold text-gray-900;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface rounded-card shadow-subtle border border-gray-100;
+  }
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white rounded-btn px-4 py-2 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+  }
+}
