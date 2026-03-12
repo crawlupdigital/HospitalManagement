@@ -5,7 +5,8 @@ const {
   registerPatient, 
   updatePatient, 
   updatePatientStage,
-  recordVitals
+  recordVitals,
+  lookupByPhone
 } = require('../controllers/patient.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 
@@ -14,6 +15,7 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', getPatients);
+router.get('/lookup', lookupByPhone);
 router.post('/', authorize('admin', 'receptionist'), registerPatient);
 router.get('/:id', getPatientById);
 router.put('/:id', authorize('admin', 'receptionist'), updatePatient);

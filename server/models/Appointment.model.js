@@ -9,7 +9,15 @@ const Appointment = sequelize.define('Appointment', {
   },
   patient_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true  // nullable for non-patient visitors (MR, attendant)
+  },
+  visitor_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  visitor_type: {
+    type: DataTypes.ENUM('PATIENT', 'MEDICAL_REP', 'ATTENDANT', 'EMERGENCY', 'FOLLOW_UP'),
+    defaultValue: 'PATIENT'
   },
   doctor_id: {
     type: DataTypes.INTEGER,
@@ -25,6 +33,10 @@ const Appointment = sequelize.define('Appointment', {
   appointment_time: {
     type: DataTypes.TIME,
     allowNull: false
+  },
+  time_slot: {
+    type: DataTypes.STRING(20),
+    allowNull: true
   },
   token_no: {
     type: DataTypes.INTEGER,

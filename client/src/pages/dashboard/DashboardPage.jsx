@@ -1,147 +1,141 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../store/authStore';
+import useDashboardStore from '../../store/dashboardStore';
+import useSocket from '../../hooks/useSocket';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Users, Calendar, IndianRupee, BedDouble, Activity } from 'lucide-react';
+import ClickableStat from '../../components/ui/ClickableStat';
+import LiveIndicator from '../../components/ui/LiveIndicator';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { Button } from '../../components/ui/Button';
+import { Users, Calendar, IndianRupee, BedDouble, Activity, Plus, UserPlus, FileText, BarChart3, Clock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { formatCurrency } from '../../utils/formatters';
+import { STAGE_LABELS, STAGE_COLORS } from '../../utils/constants';
 import api from '../../lib/axios';
-
-// Fallback data for revenue chart (can be replaced with a real endpoint later)
-const revenueData = [
-  { name: 'Mon', revenue: 4000 },
-  { name: 'Tue', revenue: 3000 },
-  { name: 'Wed', revenue: 5000 },
-  { name: 'Thu', revenue: 2780 },
-  { name: 'Fri', revenue: 6890 },
-  { name: 'Sat', revenue: 8390 },
-  { name: 'Sun', revenue: 3490 },
-];
-
-const StatCard = ({ title, value, icon: Icon, trend, colorClass }) => (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-            <h3 className="text-2xl font-bold font-jakarta text-gray-900">{value}</h3>
-          </div>
-          <div className={`p-3 rounded-full ${colorClass}`}>
-            <Icon className="w-6 h-6" />
-          </div>
-        </div>
-        {trend !== undefined && (
-            <div className="mt-4 flex items-center text-sm">
-                <span className={`font-medium ${trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {trend > 0 ? '+' : ''}{trend}%
-                </span>
-                <span className="text-gray-500 ml-2">vs last week</span>
-            </div>
-        )}
-      </CardContent>
-    </Card>
-);
 
 const DashboardPage = () => {
     const { user } = useAuthStore();
+    const navigate = useNavigate();
+    const socket = useSocket();
 
-    const [stats, setStats] = useState({
-      total_patients: 0,
-      today_appointments: 0,
-      total_revenue: 0,
-      bed_occupancy: { occupied: 0, total: 0, rate: 0 }
-    });
-    const [patientFlow, setPatientFlow] = useState([]);
+    const { stats, setStats, patientFlow, setPatientFlow, isConnected } = useDashboardStore();
+    const [revenueChart, setRevenueChart] = useState([]);
+    const [departmentLoad, setDepartmentLoad] = useState([]);
+    const [recentActivity, setRecentActivity] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-      const fetchStats = async () => {
+      const fetchAll = async () => {
         try {
-          const [statsRes, flowRes] = await Promise.all([
+          const [statsRes, flowRes, revRes, deptRes, actRes] = await Promise.all([
             api.get('/dashboard/stats'),
-            api.get('/dashboard/patient-flow')
+            api.get('/dashboard/patient-flow'),
+            api.get('/dashboard/revenue-chart?days=7'),
+            api.get('/dashboard/department-load'),
+            api.get('/dashboard/recent-activity?limit=8')
           ]);
           if (statsRes.data?.data) setStats(statsRes.data.data);
           if (flowRes.data?.data) setPatientFlow(flowRes.data.data);
+          if (revRes.data?.data) setRevenueChart(revRes.data.data);
+          if (deptRes.data?.data) setDepartmentLoad(deptRes.data.data);
+          if (actRes.data?.data) setRecentActivity(actRes.data.data);
         } catch (err) {
-          console.error('Dashboard stats fetch error', err);
+          console.error('Dashboard fetch error', err);
+        } finally {
+          setIsLoading(false);
         }
       };
-      fetchStats();
+      fetchAll();
     }, []);
 
-    const stageColors = {
-      reception: 'bg-gray-100 text-gray-700',
-      triage: 'bg-yellow-100 text-yellow-700',
-      consultation: 'bg-blue-100 text-blue-700',
-      pharmacy: 'bg-purple-100 text-purple-700',
-      lab: 'bg-indigo-100 text-indigo-700',
-      billing: 'bg-green-100 text-green-700',
-      discharged: 'bg-emerald-100 text-emerald-700',
-    };
-
-    const stageLabels = {
-      reception: 'Waiting Reception',
-      triage: 'In Triage',
-      consultation: 'Consultation',
-      pharmacy: 'Pharmacy / Lab',
-      lab: 'Laboratory',
-      billing: 'Billing',
-      discharged: 'Discharged',
+    const activityIcons = {
+      appointment: <Calendar className="w-4 h-4 text-blue-500" />,
+      patient: <UserPlus className="w-4 h-4 text-green-500" />,
+      invoice: <FileText className="w-4 h-4 text-indigo-500" />,
     };
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center flex-wrap gap-4">
                 <div>
                     <h1 className="text-2xl font-bold font-jakarta text-gray-900 capitalize">
                         Welcome back, {user?.name || 'Administrator'}
                     </h1>
-                    <p className="text-gray-500 text-sm mt-1">Here is what's happening in your hospital today.</p>
+                    <p className="text-gray-500 text-sm mt-1">Here's what's happening in your hospital today.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    {isConnected && <LiveIndicator />}
+                    <Button className="bg-blue-600 hover:bg-blue-700 gap-2" onClick={() => navigate('/appointments')}>
+                        <Plus className="w-4 h-4" /> Book Appointment
+                    </Button>
                 </div>
             </div>
 
-            {/* Top Stats Row */}
+            {/* ─── Clickable Stat Cards ──────────────────── */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard 
+                <ClickableStat 
                     title="Total Patients" 
                     value={stats.total_patients.toLocaleString('en-IN')} 
                     icon={Users} 
                     colorClass="bg-blue-100 text-blue-600" 
+                    href="/patients"
+                    loading={isLoading}
                 />
-                <StatCard 
+                <ClickableStat 
                     title="Today's Appointments" 
                     value={stats.today_appointments} 
                     icon={Calendar} 
                     colorClass="bg-indigo-100 text-indigo-600" 
+                    href="/appointments"
+                    loading={isLoading}
                 />
-                <StatCard 
+                <ClickableStat 
                     title="Total Revenue" 
-                    value={`₹${Number(stats.total_revenue).toLocaleString('en-IN')}`}
+                    value={formatCurrency(stats.total_revenue)}
                     icon={IndianRupee} 
                     colorClass="bg-green-100 text-green-600" 
+                    href="/billing"
+                    loading={isLoading}
                 />
-                <StatCard 
+                <ClickableStat 
                     title="Bed Occupancy" 
-                    value={`${stats.bed_occupancy.rate}%`} 
+                    value={`${stats.bed_occupancy.occupied}/${stats.bed_occupancy.total} (${stats.bed_occupancy.rate}%)`}
                     icon={BedDouble} 
                     colorClass="bg-orange-100 text-orange-600" 
+                    href="/icu"
+                    loading={isLoading}
                 />
             </div>
 
+            {/* ─── Quick Actions ─────────────────────────── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Book Appointment', icon: Calendar, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100', route: '/appointments' },
+                  { label: 'Register Patient', icon: UserPlus, color: 'bg-green-50 text-green-700 hover:bg-green-100', route: '/patients' },
+                  { label: 'Generate Invoice', icon: FileText, color: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100', route: '/billing' },
+                  { label: 'View Reports', icon: BarChart3, color: 'bg-purple-50 text-purple-700 hover:bg-purple-100', route: '/analytics' },
+                ].map(a => (
+                  <button key={a.label} onClick={() => navigate(a.route)} className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${a.color}`}>
+                    <a.icon className="w-4 h-4" /> {a.label}
+                  </button>
+                ))}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Revenue Chart */}
+                {/* ─── Revenue Chart (from API) ──────────── */}
                 <Card className="col-span-1 lg:col-span-2">
                     <CardHeader>
-                        <CardTitle>Revenue Overview</CardTitle>
+                        <CardTitle>Revenue Overview (7 Days)</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="h-[300px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={revenueData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                <LineChart data={revenueChart.length > 0 ? revenueChart : [{ date: 'No data', revenue: 0 }]} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tickFormatter={(value) => value.slice(0,3)} dy={10} fontSize={12} fill="#6B7280" />
-                                    <YAxis axisLine={false} tickLine={false} fontSize={12} fill="#6B7280" tickFormatter={(value) => `₹${value}`} dx={-10} />
-                                    <Tooltip 
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    />
+                                    <XAxis dataKey="date" axisLine={false} tickLine={false} dy={10} fontSize={11} fill="#6B7280" tickFormatter={(v) => v.slice(5)} />
+                                    <YAxis axisLine={false} tickLine={false} fontSize={12} fill="#6B7280" tickFormatter={(v) => `₹${v >= 1000 ? Math.floor(v/1000)+'k' : v}`} dx={-10} />
+                                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(v) => [`₹${Number(v).toLocaleString('en-IN')}`, 'Revenue']} />
                                     <Line type="monotone" dataKey="revenue" stroke="#1A73E8" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
                                 </LineChart>
                             </ResponsiveContainer>
@@ -149,40 +143,85 @@ const DashboardPage = () => {
                     </CardContent>
                 </Card>
 
-                {/* Live Patient Flow */}
+                {/* ─── Live Patient Flow ──────────────────── */}
                 <Card className="col-span-1 border-l-4 border-l-blue-500">
-                     <CardHeader>
+                    <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Activity className="w-5 h-5 text-blue-500" />
                             Live Patient Flow
+                            {isConnected && <LiveIndicator label="" className="ml-auto" />}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             {patientFlow.length > 0 ? patientFlow.map((item, i) => (
-                                <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                                    <span className="text-sm font-medium text-gray-700 capitalize">{stageLabels[item.stage] || item.stage}</span>
-                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${stageColors[item.stage] || 'bg-gray-100 text-gray-700'}`}>
-                                        {item.count}
-                                    </span>
-                                </div>
+                                <button 
+                                  key={i} 
+                                  className="w-full flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-blue-200 transition-colors cursor-pointer"
+                                  onClick={() => navigate(`/patients?stage=${item.stage}`)}
+                                >
+                                    <span className="text-sm font-medium text-gray-700 capitalize">{STAGE_LABELS[item.stage] || item.stage}</span>
+                                    <StatusBadge status={item.stage} className="min-w-[2rem] text-center" />
+                                    <span className="text-lg font-bold text-gray-900 ml-2">{item.count}</span>
+                                </button>
                             )) : (
-                              [
-                                { stage: 'Waiting Reception', count: 0, color: 'bg-gray-100 text-gray-700' },
-                                { stage: 'In Triage', count: 0, color: 'bg-yellow-100 text-yellow-700' },
-                                { stage: 'Consultation', count: 0, color: 'bg-blue-100 text-blue-700' },
-                                { stage: 'Pharmacy / Lab', count: 0, color: 'bg-purple-100 text-purple-700' },
-                                { stage: 'Billing', count: 0, color: 'bg-green-100 text-green-700' },
-                              ].map((item, i) => (
-                                <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                                    <span className="text-sm font-medium text-gray-700">{item.stage}</span>
-                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.color}`}>
-                                        {item.count}
-                                    </span>
-                                </div>
-                              ))
+                              <p className="text-sm text-gray-400 italic text-center py-8">No active patient flow data</p>
                             )}
                         </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* ─── Department Load ────────────────────── */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Department Load</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {departmentLoad.length > 0 ? (
+                          <div className="space-y-3">
+                            {departmentLoad.map((d, i) => (
+                              <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                                <span className="text-sm font-medium text-gray-700 capitalize">{d.department || 'Unknown'}</span>
+                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">{d.pending_tasks} pending</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400 italic text-center py-8">No pending department tasks</p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* ─── Recent Activity Feed ───────────────── */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-gray-500" />
+                            Recent Activity
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {recentActivity.length > 0 ? (
+                          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                            {recentActivity.map((a, i) => (
+                              <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                                <div className="mt-0.5">{activityIcons[a.type] || <Activity className="w-4 h-4 text-gray-400" />}</div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium">{a.patient}</span>{' '}
+                                    <span className="text-gray-500">{a.action}</span>
+                                  </p>
+                                  <p className="text-xs text-gray-400">{a.detail}</p>
+                                </div>
+                                <span className="text-xs text-gray-400 whitespace-nowrap">{a.time}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400 italic text-center py-8">No recent activity</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>

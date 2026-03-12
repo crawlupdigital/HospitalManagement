@@ -35,6 +35,7 @@ const SavedQuery = require('./SavedQuery.model');
 const ScheduledReport = require('./ScheduledReport.model');
 const StaffPerformance = require('./StaffPerformance.model');
 const BottleneckAlert = require('./BottleneckAlert.model');
+const Visitor = require('./Visitor.model');
 
 
 
@@ -47,6 +48,12 @@ Vital.belongsTo(Patient, { foreignKey: 'patient_id' });
 Patient.hasMany(Appointment, { foreignKey: 'patient_id' });
 Appointment.belongsTo(Patient, { foreignKey: 'patient_id' });
 Appointment.belongsTo(User, { foreignKey: 'doctor_id' });
+
+// Visitor associations
+Visitor.belongsTo(Patient, { foreignKey: 'patient_id' });
+Patient.hasMany(Visitor, { foreignKey: 'patient_id' });
+Appointment.belongsTo(Visitor, { foreignKey: 'visitor_id' });
+Visitor.hasMany(Appointment, { foreignKey: 'visitor_id' });
 
 Patient.hasMany(Prescription, { foreignKey: 'patient_id' });
 Prescription.belongsTo(Patient, { foreignKey: 'patient_id' });
@@ -138,5 +145,5 @@ module.exports = {
   ScheduledReport,
   StaffPerformance,
   BottleneckAlert,
-
+  Visitor,
 };

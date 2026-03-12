@@ -1,4 +1,5 @@
 const { Patient, Vital, Appointment, PatientJourney } = require('../models');
+const { Op } = require('sequelize');
 
 // Utilities
 const generatePatientId = async () => {
@@ -14,7 +15,13 @@ exports.getPatients = async (req, res, next) => {
 
     const where = {};
     if (stage) where.current_stage = stage;
-    // Add fuzzy search later for name/phone if needed
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { phone: { [Op.like]: `%${search}%` } },
+        { patient_uid: { [Op.like]: `%${search}%` } }
+      ];
+    }
 
     const patients = await Patient.findAndCountAll({
       where,
@@ -24,6 +31,27 @@ exports.getPatients = async (req, res, next) => {
     });
 
     res.status(200).json({ success: true, data: patients });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Fast phone-based lookup for smart booking
+exports.lookupByPhone = async (req, res, next) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ success: false, message: 'Phone number required' });
+
+    const patient = await Patient.findOne({
+      where: { phone },
+      attributes: ['id', 'patient_uid', 'name', 'age', 'gender', 'phone', 'blood_group', 'city', 'allergies', 'current_stage']
+    });
+
+    if (patient) {
+      res.status(200).json({ success: true, found: true, data: patient });
+    } else {
+      res.status(200).json({ success: true, found: false });
+    }
   } catch (error) {
     next(error);
   }
